@@ -15,6 +15,9 @@ SSID=""
 PASSWORD=""
 AD_DNS_SERVER=""  # Default DNS server
 
+# State file for initial Wi-Fi connection status
+INITIAL_WIFI_STATE="/tmp/${WIFI_INTERFACE}_initial_state.txt"
+
 # Parse optional arguments only if action is "on"
 if [[ "$ACTION" == "on" ]]; then
     shift 3
@@ -81,6 +84,30 @@ remove_hostapd_conf() {
     fi
 }
 
+# Function to save and disconnect Wi-Fi if necessary
+disconnect_wifi_if_needed() {
+    local connected
+    connected=$(nmcli -t -f GENERAL.STATE dev show "$WIFI_INTERFACE" | grep -o '100' || echo "0")
+    if [[ "$connected" -eq 100 ]]; then
+        nmcli dev disconnect "$WIFI_INTERFACE"
+        echo "Wi-Fi interface $WIFI_INTERFACE was connected. Disconnecting it..."
+        echo "connected" > "$INITIAL_WIFI_STATE"
+    else
+        echo "disconnected" > "$INITIAL_WIFI_STATE"
+    fi
+}
+
+# Function to restore initial Wi-Fi connection state
+restore_wifi_connection() {
+    if [ -f "$INITIAL_WIFI_STATE" ]; then
+        if grep -q "connected" "$INITIAL_WIFI_STATE"; then
+            nmcli dev connect "$WIFI_INTERFACE"
+            echo "Restoring initial Wi-Fi connection state for $WIFI_INTERFACE."
+        fi
+        rm "$INITIAL_WIFI_STATE"
+    fi
+}
+
 # Function to unblock Wi-Fi if blocked
 unblock_wifi() {
     if rfkill list wifi | grep -q "Soft blocked: yes"; then
@@ -122,8 +149,9 @@ enable_sharing() {
     sudo sysctl -w net.ipv4.ip_forward=1
     echo "IP forwarding enabled."
 
-    # Unblock Wi-Fi interface if necessary
+    # Unblock Wi-Fi interface if necessary and disconnect if needed
     unblock_wifi
+    disconnect_wifi_if_needed
 
     # Remove any existing generic MASQUERADE rules
     sudo iptables -t nat -D POSTROUTING -o "$INTERNET_INTERFACE" -j MASQUERADE 2>/dev/null
@@ -196,8 +224,9 @@ disable_sharing() {
     remove_hostapd_conf
     echo "hostapd stopped and configuration removed."
 
-    # Restore dnsmasq configuration
+    # Restore dnsmasq configuration and initial Wi-Fi connection state
     restore_dnsmasq
+    restore_wifi_connection
     sudo systemctl restart dnsmasq
     echo "dnsmasq restarted."
     echo "Internet sharing disabled."
