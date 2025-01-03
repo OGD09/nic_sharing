@@ -48,6 +48,12 @@ if [[ "$ACTION" == "on" ]]; then
         echo "Error: --ssid and --pass are required when enabling sharing."
         exit 1
     fi
+
+    # Validate password length for WPA2
+    if [[ ${#PASSWORD} -lt 8 || ${#PASSWORD} -gt 63 ]]; then
+        echo "Error: Password must be between 8 and 63 characters long."
+        exit 1
+    fi
 fi
 
 DNSMASQ_CONF="/etc/dnsmasq.conf"
