@@ -18,8 +18,31 @@ AD_DNS_SERVER=""  # Default DNS server
 # State file for initial Wi-Fi connection status
 INITIAL_WIFI_STATE="/tmp/${WIFI_INTERFACE}_initial_state.txt"
 
+# Function to verify if an interface is a Wi-Fi interface
+is_wifi_interface() {
+    local interface="$1"
+    # Vérifier si l'interface existe dans /sys/class/net
+    if [ ! -d "/sys/class/net/$interface" ]; then
+        echo "Erreur : L'interface $interface n'existe pas."
+        return 1
+    fi
+
+    # Vérifier si l'interface est une interface Wi-Fi en utilisant iw
+    if ! iw dev "$interface" info &>/dev/null; then
+        echo "Erreur : L'interface $interface n'est pas une interface Wi-Fi."
+        return 1
+    fi
+
+    return 0
+}
+
 # Parse optional arguments only if action is "on"
 if [[ "$ACTION" == "on" ]]; then
+    # Vérifier que l'interface Wi-Fi est bien une interface Wi-Fi
+    if ! is_wifi_interface "$WIFI_INTERFACE"; then
+        exit 1
+    fi
+
     shift 3
     while [[ $# -gt 0 ]]; do
         case "$1" in
