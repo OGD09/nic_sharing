@@ -21,15 +21,15 @@ INITIAL_WIFI_STATE="/tmp/${WIFI_INTERFACE}_initial_state.txt"
 # Function to verify if an interface is a Wi-Fi interface
 is_wifi_interface() {
     local interface="$1"
-    # Vérifier si l'interface existe dans /sys/class/net
+    # Check if the interface exists in /sys/class/net
     if [ ! -d "/sys/class/net/$interface" ]; then
-        echo "Erreur : L'interface $interface n'existe pas."
+        echo "Error: Interface $interface does not exist."
         return 1
     fi
 
-    # Vérifier si l'interface est une interface Wi-Fi en utilisant iw
+    # Check if the interface is a Wi-Fi interface using iw
     if ! iw dev "$interface" info &>/dev/null; then
-        echo "Erreur : L'interface $interface n'est pas une interface Wi-Fi."
+        echo "Error: Interface $interface is not a Wi-Fi interface."
         return 1
     fi
 
