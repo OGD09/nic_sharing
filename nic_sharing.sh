@@ -13,7 +13,7 @@ WIFI_INTERFACE="$3"
 DNS_OPTION=false  # DNS configuration option
 SSID=""
 PASSWORD=""
-AD_DNS_SERVER=""  # Default DNS server
+AD_DNS_SERVER="8.8.8.8"  # Default DNS server
 
 # State file for initial Wi-Fi connection status
 INITIAL_WIFI_STATE="/tmp/${WIFI_INTERFACE}_initial_state.txt"
@@ -25,6 +25,13 @@ is_wifi_interface() {
     if [ ! -d "/sys/class/net/$interface" ]; then
         echo "Error: Interface $interface does not exist."
         return 1
+    fi
+    echo "dhcp-option=6,$AD_DNS_SERVER" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
+    echo "dnsmasq configured with DNS server $AD_DNS_SERVER for all clients."
+
+    # Use default DNS server if none is provided
+    if [[ "$DNS_OPTION" == false ]]; then
+        echo "No DNS server provided. Using default DNS server: $AD_DNS_SERVER"
     fi
 
     # Check if the interface is a Wi-Fi interface using iw
