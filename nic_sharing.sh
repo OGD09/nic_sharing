@@ -28,7 +28,7 @@ is_wifi_interface() {
     fi
 
     # Check if the interface is a Wi-Fi interface using iw
-    if ! iw dev "$interface" info &>/dev/null; then
+    if ! sudo iw dev "$interface" info &>/dev/null; then
         echo "Error: Interface $interface is not a Wi-Fi interface."
         return 1
     fi
@@ -139,7 +139,7 @@ restore_wifi_connection() {
 
 # Function to unblock Wi-Fi if blocked
 unblock_wifi() {
-    if rfkill list wifi | grep -q "Soft blocked: yes"; then
+    if sudo rfkill list wifi | grep -q "Soft blocked: yes"; then
         sudo rfkill unblock wifi
         echo "Wi-Fi interface $WIFI_INTERFACE unblocked."
     fi
