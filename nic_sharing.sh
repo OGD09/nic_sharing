@@ -2,7 +2,7 @@
 
 # Check arguments for on/off action
 if [[ "$#" -lt 3 || ("$1" != "on" && "$1" != "off") ]]; then
-    echo "Usage: $0 <on|off> <source_interface> <destination_interface> [--ssid <SSID> --pass <PASSWORD> --dns <DNS_SERVER>]"
+    echo "Usage: $0 <on|off> <source_interface> <destination_interface> [--ssid <SSID> --pass <PASSWORD> --dns <DNS_SERVER> --domain <SEARCH_DOMAIN>]"
     exit 1
 fi
 
@@ -10,7 +10,8 @@ fi
 ACTION="$1"
 INTERNET_INTERFACE="$2"
 WIFI_INTERFACE="$3"
-DNS_OPTION=false  # DNS configuration option
+DNS_OPTION=false          # DNS configuration option
+DOMAIN_OPTION=false       # Domain (search-suffix) sharing
 SSID=""
 PASSWORD=""
 AD_DNS_SERVER="8.8.8.8"  # Default DNS server
@@ -26,20 +27,12 @@ is_wifi_interface() {
         echo "Error: Interface $interface does not exist."
         return 1
     fi
-    echo "dhcp-option=6,$AD_DNS_SERVER" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
-    echo "dnsmasq configured with DNS server $AD_DNS_SERVER for all clients."
-
-    # Use default DNS server if none is provided
-    if [[ "$DNS_OPTION" == false ]]; then
-        echo "No DNS server provided. Using default DNS server: $AD_DNS_SERVER"
-    fi
 
     # Check if the interface is a Wi-Fi interface using iw
     if ! sudo iw dev "$interface" info &>/dev/null; then
         echo "Error: Interface $interface is not a Wi-Fi interface."
         return 1
     fi
-
     return 0
 }
 
@@ -64,6 +57,11 @@ if [[ "$ACTION" == "on" ]]; then
             --dns)
                 DNS_OPTION=true
                 AD_DNS_SERVER="$2"
+                shift 2
+                ;;
+            --domain)
+                DOMAIN_OPTION=true
+                SEARCH_DOMAIN="$2"
                 shift 2
                 ;;
             *)
@@ -168,6 +166,21 @@ setup_dnsmasq() {
         echo "dhcp-option=6,$AD_DNS_SERVER" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
         echo "dnsmasq configured with DNS server $AD_DNS_SERVER for all clients."
     fi
+
+    if [ "$DOMAIN_OPTION" = true ]; then
+        # Diffuse le domaine en suffixe de recherche (DHCP option 15 et 119)
+        echo "domain=$SEARCH_DOMAIN" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
+        echo "dhcp-option=15,$SEARCH_DOMAIN" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
+        echo "dhcp-option=option:domain-search,$SEARCH_DOMAIN" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
+        echo "Search domain $SEARCH_DOMAIN advertised to clients."
+
+        # Si un DNS a été fourni, on redirige les requêtes vers ce DNS pour le domaine cible
+        if [ "$DNS_OPTION" = true ]; then
+            # Transfert conditionnel: toutes les requêtes *.SEARCH_DOMAIN vers AD_DNS_SERVER
+            echo "server=/$SEARCH_DOMAIN/$AD_DNS_SERVER" | sudo tee -a "$DNSMASQ_CONF" > /dev/null
+            echo "Forwarding queries for $SEARCH_DOMAIN to $AD_DNS_SERVER."
+        fi
+    fi
 }
 
 # Function to restore dnsmasq.conf
@@ -213,7 +226,7 @@ enable_sharing() {
     fi
 
     # Configure the Wi-Fi interface
-    sudo ip addr add "$IP_ADDRESS/24" dev "$WIFI_INTERFACE"
+    sudo ip addr add "$IP_ADDRESS/24" dev "$WIFI_INTERFACE" 2>/dev/null || true
     sudo ip link set "$WIFI_INTERFACE" up
     echo "Wi-Fi interface $WIFI_INTERFACE configured with IP $IP_ADDRESS."
 
@@ -256,7 +269,7 @@ disable_sharing() {
     echo "Wi-Fi interface $WIFI_INTERFACE down."
 
     # Stop hostapd and remove hostapd configuration
-    sudo pkill hostapd
+    sudo pkill hostapd || true
     remove_hostapd_conf
     echo "hostapd stopped and configuration removed."
 
@@ -274,4 +287,3 @@ if [ "$ACTION" == "on" ]; then
 elif [ "$ACTION" == "off" ]; then
     disable_sharing
 fi
-
